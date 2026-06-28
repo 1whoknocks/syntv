@@ -13,8 +13,8 @@ android {
         applicationId = "com.synocam"
         minSdk = 23
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.2.1"
+        versionCode = 4
+        versionName = "0.2.2"
     }
 
     buildTypes {
@@ -60,7 +60,10 @@ android {
             isEnable = true
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = false
+            // Also emit a single universal APK carrying ALL ABIs. This is the foolproof
+            // sideload artifact: many Fire TV Sticks run a 32-bit (armeabi-v7a) Fire OS even
+            // on 64-bit hardware and reject an arm64-only APK with "isn't compatible with your TV".
+            isUniversalApk = true
         }
     }
 }

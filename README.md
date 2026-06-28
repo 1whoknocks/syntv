@@ -17,14 +17,16 @@ Station Web API — no per-camera URLs to paste.
 
 ## Download
 
-Grab the prebuilt **arm64-v8a** APK (Fire TV Stick 4K / 4K Max / Cube, Stick 3rd gen)
-from the latest release:
+Grab the prebuilt **universal** APK from the latest release — it carries every CPU ABI,
+so it installs on any Fire TV (Stick Lite / 3rd gen / 4K / 4K Max / Cube), including the
+many sticks that run a 32-bit Fire OS and reject an arm64-only build:
 
-**[⬇ Download SynoCam v0.2.1 APK](https://github.com/1whoknocks/syntv/releases/download/v0.2.1/synocam-arm64-v8a-v0.2.1.apk)**
+**[⬇ Download SynoCam v0.2.2 APK (universal)](https://github.com/1whoknocks/syntv/releases/download/v0.2.2/synocam-universal-v0.2.2.apk)**
 
 In the Fire TV **Downloader** app, enter that URL (or a short link to it) to install —
 see [Sideload onto the Fire TV](#3-sideload-onto-the-fire-tv). To build it yourself
-instead, see [Build the APK](#2-build-the-apk).
+instead, see [Build the APK](#2-build-the-apk). (Per-ABI splits are also attached to the
+release if you prefer a smaller download for a known device.)
 
 ---
 
@@ -81,7 +83,7 @@ adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 **Downloader** app:
 
 ```
-https://github.com/1whoknocks/syntv/releases/download/v0.2.1/synocam-arm64-v8a-v0.2.1.apk
+https://github.com/1whoknocks/syntv/releases/download/v0.2.2/synocam-universal-v0.2.2.apk
 ```
 
 (or build your own and host it on any reachable URL / GitHub Release).
