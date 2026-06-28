@@ -14,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 sealed interface Screen {
     data object Setup : Screen
@@ -64,7 +65,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val streams = coroutineScope {
                     cameras.map { cam ->
-                        async { CameraStream(cam, runCatching { client.liveViewRtsp(cam.id) }.getOrNull()) }
+                        async {
+                            // Per-camera cap so a single slow/unresponsive GetLiveViewPath cannot
+                            // stall the whole wall load. A null url just renders as "No stream".
+                            val url = runCatching {
+                                withTimeoutOrNull(PATH_FETCH_TIMEOUT_MS) { client.liveViewRtsp(cam.id) }
+                            }.getOrNull()
+                            CameraStream(cam, url)
+                        }
                     }.awaitAll()
                 }
                 if (persist) settings.save(config)
@@ -100,4 +108,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** True only when a single camera is open (Fullscreen) — the case where leaving should pop PiP. */
     fun cameraIsOpen(): Boolean = state.screen is Screen.Fullscreen && state.cameras.isNotEmpty()
+
+    private companion object {
+        const val PATH_FETCH_TIMEOUT_MS = 20_000L
+    }
 }

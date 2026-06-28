@@ -49,7 +49,9 @@ class SurveillanceClient(private val config: NasConfig) {
         resp.data!!.sid.also { sid = it }
     }
 
-    suspend fun listCameras(): List<Camera> = withContext(Dispatchers.IO) {
+    suspend fun listCameras(): List<Camera> = listCameras(reloginAllowed = true)
+
+    private suspend fun listCameras(reloginAllowed: Boolean): List<Camera> = withContext(Dispatchers.IO) {
         val token = sid ?: login()
         val url = base("/webapi/entry.cgi")
             .addQueryParameter("api", "SYNO.SurveillanceStation.Camera")
@@ -61,18 +63,21 @@ class SurveillanceClient(private val config: NasConfig) {
             .build()
         val resp = json.decodeFromString(CameraListResponse.serializer(), get(url.toString()))
         if (!resp.success) {
-            if (resp.error?.code in SESSION_ERRORS) {
+            // Re-login and retry ONCE for a genuinely-expired session — never loop.
+            if (reloginAllowed && isSessionError(resp.error?.code)) {
                 sid = null
                 login()
-                return@withContext listCameras()
+                return@withContext listCameras(reloginAllowed = false)
             }
-            throw SurveillanceException("Failed to list cameras (code ${resp.error?.code}).")
+            throw SurveillanceException(cameraErrorMessage(resp.error?.code))
         }
         resp.data?.cameras.orEmpty()
     }
 
     /** Returns the live-view RTSP url for one camera (credentials embedded by the NAS). */
-    suspend fun liveViewRtsp(cameraId: Int): String = withContext(Dispatchers.IO) {
+    suspend fun liveViewRtsp(cameraId: Int): String = liveViewRtsp(cameraId, reloginAllowed = true)
+
+    private suspend fun liveViewRtsp(cameraId: Int, reloginAllowed: Boolean): String = withContext(Dispatchers.IO) {
         val token = sid ?: login()
         val url = base("/webapi/entry.cgi")
             .addQueryParameter("api", "SYNO.SurveillanceStation.Camera")
@@ -83,12 +88,15 @@ class SurveillanceClient(private val config: NasConfig) {
             .build()
         val resp = json.decodeFromString(LiveViewPathResponse.serializer(), get(url.toString()))
         if (!resp.success) {
-            if (resp.error?.code in SESSION_ERRORS) {
+            // 105 = insufficient privilege (a real, terminal error) — must NOT be retried as a
+            // session error, or every camera spins forever re-logging in. Only retry once for a
+            // truly expired session.
+            if (reloginAllowed && isSessionError(resp.error?.code)) {
                 sid = null
                 login()
-                return@withContext liveViewRtsp(cameraId)
+                return@withContext liveViewRtsp(cameraId, reloginAllowed = false)
             }
-            throw SurveillanceException("Failed to get stream path (code ${resp.error?.code}).")
+            throw SurveillanceException(pathErrorMessage(resp.error?.code))
         }
         resp.data.firstOrNull()?.rtspPath?.takeIf { it.isNotBlank() }
             ?: throw SurveillanceException("No RTSP path returned for camera $cameraId.")
@@ -105,14 +113,33 @@ class SurveillanceClient(private val config: NasConfig) {
     }
 
     companion object {
-        // DSM session/auth error codes that mean "log in again".
-        private val SESSION_ERRORS = setOf(105, 106, 107, 119)
+        // DSM error codes that mean "the session is gone, log in again".
+        // IMPORTANT: 105 (insufficient privilege) is deliberately NOT here. It is a terminal
+        // permission error, and re-logging in returns the same 105 — treating it as a session
+        // error caused an infinite re-login loop that hung the camera wall on "Connecting…".
+        private val SESSION_ERRORS = setOf(106, 107, 119)
+
+        /** True only for codes where dropping the sid and logging in again can actually help. */
+        internal fun isSessionError(code: Int?): Boolean = code in SESSION_ERRORS
 
         fun authErrorMessage(code: Int?): String = when (code) {
             400, 401 -> "Wrong account or password."
             402 -> "Account has no Surveillance Station permission."
             403, 404 -> "Two-factor (OTP) is enabled. Use a dedicated user without 2FA."
             else -> "Login failed (code ${code ?: "unknown"})."
+        }
+
+        fun cameraErrorMessage(code: Int?): String = when (code) {
+            105 -> "This account lacks Surveillance Station privilege to list cameras."
+            else -> "Failed to list cameras (code ${code ?: "unknown"})."
+        }
+
+        fun pathErrorMessage(code: Int?): String = when (code) {
+            // The most common real-world cause, now that login/list work: the dedicated user is a
+            // Surveillance Station "Viewer". GetLiveViewPath (which hands back the RTSP URL with the
+            // camera's own credentials embedded) requires "Manager" privilege.
+            105 -> "No live-view permission for this camera (needs Surveillance Station Manager privilege)."
+            else -> "Failed to get stream path (code ${code ?: "unknown"})."
         }
 
         private fun buildHttpClient(useHttps: Boolean): OkHttpClient {

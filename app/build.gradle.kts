@@ -13,8 +13,8 @@ android {
         applicationId = "com.synocam"
         minSdk = 23
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
 
     buildTypes {
@@ -42,6 +42,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true // expose BuildConfig.DEBUG (verbose libVLC logging on debug builds)
     }
 
     packaging {

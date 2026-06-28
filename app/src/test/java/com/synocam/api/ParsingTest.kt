@@ -45,6 +45,24 @@ class ParsingTest {
     }
 
     @Test
+    fun privilegeCode105IsNotTreatedAsSessionError() {
+        // Regression guard for the "stuck on Connecting…" bug: 105 (insufficient privilege) must
+        // NOT trigger a re-login, or every GetLiveViewPath call loops forever re-authenticating.
+        assertFalse(SurveillanceClient.isSessionError(105))
+        // Genuinely-expired-session codes still re-login.
+        assertTrue(SurveillanceClient.isSessionError(106))
+        assertTrue(SurveillanceClient.isSessionError(107))
+        assertTrue(SurveillanceClient.isSessionError(119))
+        assertFalse(SurveillanceClient.isSessionError(null))
+    }
+
+    @Test
+    fun pathErrorMessageExplains105AsPrivilege() {
+        val msg = SurveillanceClient.pathErrorMessage(105)
+        assertTrue(msg.contains("Manager"))
+    }
+
+    @Test
     fun parsesLiveViewPath() {
         val body = """
             {"data":[{"id":1,"rtspPath":"rtsp://user:pass@192.168.1.100:554/Sms=1.unicast","mjpegHttpPath":"http://x/y"}],"success":true}
